@@ -113,6 +113,8 @@ export interface AgentRuntimeConfig {
    * Host 可以用 getter 注入, agent 会在每次判断时读取最新值。
    */
   autoCompactThresholdPct?: number;
+  /** Provider-declared inclusive message_start followed by exclusive delta/result usage. */
+  usageMessageStartIncludesCache?: (providerId: string | null) => boolean;
 
   /**
    * Pi 原生自动压缩的目标上下文占用百分比。Pi 将它换算成

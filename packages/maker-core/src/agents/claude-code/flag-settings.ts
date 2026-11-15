@@ -38,6 +38,7 @@
  * 的计费头(issue #758),订阅直连时必须保留。这里只关 git / GitHub 可见署名。
  */
 
+import { applyClaudeContextWindow } from './env-builder.js';
 import type { Settings } from '@anthropic-ai/claude-agent-sdk';
 import type { CapabilityRoutingPolicy } from '../../types/capability-routing.js';
 import type { BotRuntimeSkillPolicy } from '../base-agent.js';
@@ -47,6 +48,9 @@ import {
 } from './capability-routing.js';
 
 export interface ClaudeFlagSettingsInput {
+  /** Host-selected working window must win over user/project settings.env. */
+  contextWindow?: number;
+  autoCompactThresholdPct?: number;
   /** reasoning summary 展示开关(displayReasoning === 'summarized')。 */
   showThinkingSummaries: boolean;
   /**
@@ -74,6 +78,8 @@ export interface ClaudeFlagSettingsInput {
 
 /** 装配 startSession 注入的 flag settings 对象。纯函数 —— 每次调用读最新输入值。 */
 export function buildClaudeFlagSettings(input: ClaudeFlagSettingsInput): Settings {
+  const contextEnv: Record<string, string> = {};
+  applyClaudeContextWindow(contextEnv, input.contextWindow, input.autoCompactThresholdPct);
   const skillOverrides: NonNullable<Settings['skillOverrides']> = {};
   if (input.botSkillPolicy) {
     const allowed = input.botSkillPolicy.mode === 'allowlist'
@@ -94,6 +100,7 @@ export function buildClaudeFlagSettings(input: ClaudeFlagSettingsInput): Setting
   Object.assign(skillOverrides, buildClaudeSkillOverrides(input.capabilityRouting));
   const deniedMcpServers = buildClaudeDeniedMcpServers(input.capabilityRouting);
   return {
+    ...(Object.keys(contextEnv).length > 0 ? { env: contextEnv } : {}),
     showThinkingSummaries: input.showThinkingSummaries,
     // 屏蔽用户级 apiKeyHelper,防止它劫持 oauth-spawn 的订阅鉴权(见文件头注释)。
     apiKeyHelper: '',

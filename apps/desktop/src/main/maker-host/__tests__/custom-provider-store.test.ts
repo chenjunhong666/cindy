@@ -902,6 +902,18 @@ describe('custom-provider-store CRUD (per-runtime)', () => {
     ]);
   });
 
+  // Regression: normalization used to discard unknown runtime flags before persistence.
+  // Unit tier uses the existing in-memory database fixture.
+  it('round-trips the explicit Claude start-frame usage declaration', async () => {
+    mountDb();
+    await createCustomProvider({ id: 'usage-provider', name: 'Usage provider',
+      runtimes: { 'claude-code': { baseUrl: 'https://example.com',
+        usageMessageStartIncludesCache: true, models: [{ id: 'qwen', name: 'Qwen' }],
+      } },
+    });
+    expect((await getCustomProvider('usage-provider'))?.runtimes['claude-code']?.usageMessageStartIncludesCache).toBe(true);
+  });
+
   it('round-trips only an explicitly enabled Codex image-generation capability', async () => {
     mountDb();
     await createCustomProvider({

@@ -25,6 +25,20 @@ import type { ModelRegistry } from "../modelAccessBean.js";
 import { BUNDLED_CATALOG } from "../catalog.js";
 import { providerCatalogId } from "../provider-identity.js";
 
+// Explicit upstream declaration must survive custom-provider projection (unit, no I/O).
+it('projects the vLLM start-frame declaration only when enabled', () => {
+  for (const enabled of [undefined, true, false]) {
+    const provider = buildUserProvider({ id: 'usage-test', name: 'Usage test',
+      auth: { method: 'apiKey' }, runtimes: { 'claude-code': {
+        baseUrl: 'https://example.com', models: [{ id: 'qwen', name: 'Qwen', contextWindow: 262_144 }],
+        usageMessageStartIncludesCache: enabled,
+      } },
+    });
+    expect(provider.routing['claude-code']?.usageMessageStartIncludesCache).toBe(enabled === true ? true : undefined);
+    expect(provider.models['claude-code']?.[0]?.contextWindow).toBe(262_144);
+  }
+});
+
 describe('native subscription instances', () => {
   it('retired independent Claude accounts stay listed but serve no agent', () => {
     const account = buildUserProvider({

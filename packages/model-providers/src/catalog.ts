@@ -354,6 +354,12 @@ function validateProvider(p: Provider, allowEmptyModalities = false): void {
         `provider '${p.id}' routing[${agent}].requestPath invalid`,
       );
     }
+    if (routing.usageMessageStartIncludesCache !== undefined) {
+      assert(
+        agent === 'claude-code' && typeof routing.usageMessageStartIncludesCache === 'boolean',
+        `provider '${p.id}' routing[${agent}].usageMessageStartIncludesCache requires a Claude Code boolean`,
+      );
+    }
     if (routing.supportsResponsesCustomTools !== undefined) {
       assert(
         typeof routing.supportsResponsesCustomTools === 'boolean',

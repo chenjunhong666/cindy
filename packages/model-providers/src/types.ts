@@ -191,6 +191,8 @@ export type OAuthProviderDescriptor =
  * 真实上游 + 鉴权 + model id 还原。加新供应商 = 加这份数据，不改路由器代码。
  */
 export interface RoutingDescriptor {
+  /** message_start input_tokens includes cache. message_delta/result remain exclusive. */
+  usageMessageStartIncludesCache?: boolean;
   modelInterface?: ModelInterfaceSnapshot;
   /**
    * 上游 wire protocol。Claude Code / Codex 缺省保持历史语义；Pi 必须显式声明。
@@ -828,6 +830,8 @@ export interface Catalog {
  * 两种端点，则两个 runtime 各有独立的 baseURL / 模型 / headers（见 CustomProviderConfig.runtimes）。
  */
 export interface CustomProviderRuntimeConfig {
+  /** vLLM-style full input at message_start, exclusive input at message_delta/result. */
+  usageMessageStartIncludesCache?: boolean;
   /** Follow current model defaults from this preset while its endpoint/protocol still match. */
   catalogPresetId?: string;
   /** 上游 wire protocol；缺省由 runtime agent 推导（Codex=Responses，Claude=Messages）。 */

@@ -2960,6 +2960,8 @@ export class ClaudeCodeAgent extends BaseAgent {
       : {};
     const buildSettings = (): Settings => {
       const settings = buildClaudeFlagSettings({
+        contextWindow: resolveModelContextWindow(mutableModel),
+        autoCompactThresholdPct: getAutoCompactThresholdPct(),
         showThinkingSummaries,
         availableModels: currentAvailableSdkModels(mutableModel),
         // Bots keep memory in their own Cindy scope, including remote sessions.
@@ -5401,6 +5403,7 @@ export class ClaudeCodeAgent extends BaseAgent {
       return accepted;
     };
 
+    const usageMessageStartIncludesCache = this.deps.runtimeConfig.usageMessageStartIncludesCache;
     const consumedEventStream = async function* (): AsyncGenerator<AgentEvent> {
       try {
         for await (const event of eventQueue) {
@@ -6014,6 +6017,7 @@ export class ClaudeCodeAgent extends BaseAgent {
                 modelUsageStartsAtZeroQueries.has(currentQ),
               getLogTitle: () => lastSendTitle,
               tracker: usageTracker,
+              usageMessageStartIncludesCache: usageMessageStartIncludesCache?.(mutableProviderId),
               onSessionId: (sid) => {
                 if (sid && unacceptedForks.has(currentQ)) {
                   sdkSessionId = sid;

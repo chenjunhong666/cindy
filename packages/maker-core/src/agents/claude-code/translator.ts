@@ -673,6 +673,8 @@ interface TranslatorLog {
 }
 
 interface TranslateContext {
+  /** Explicit upstream input semantics. Missing preserves Anthropic semantics. */
+  usageMessageStartIncludesCache?: boolean;
   rt: RuntimeState;
   turn: TurnState;
   log: TranslatorLog;
@@ -1964,7 +1966,9 @@ function handleStreamEvent(
 
     // 第三方 proxy(如 litellm)或官方端点通常在 message_start 给出 input_tokens
     const usage = event.message?.usage as Record<string, number> | undefined;
-    if (usage) {
+    // This upstream's start frame has no disjoint token buckets. Wait for its
+    // exclusive terminal usage before publishing irreversible billing receipts.
+    if (usage && !ctx.usageMessageStartIncludesCache) {
       const dIn = usage.input_tokens ?? 0;
       const dCacheRead = usage.cache_read_input_tokens ?? 0;
       const dCacheCreate = usage.cache_creation_input_tokens ?? 0;

@@ -225,6 +225,10 @@ function validateRuntime(agent: string, rt: unknown): ValidationResult {
   if (r.requestPath !== undefined && !isProviderRequestPath(r.requestPath)) {
     return invalid(`runtime '${agent}' requestPath invalid`);
   }
+  if (r.usageMessageStartIncludesCache !== undefined &&
+      (typeof r.usageMessageStartIncludesCache !== 'boolean' || agent !== 'claude-code')) {
+    return invalid(`runtime '${agent}' usageMessageStartIncludesCache requires a Claude Code boolean`);
+  }
   if (r.supportsImageGeneration !== undefined && typeof r.supportsImageGeneration !== 'boolean') {
     return invalid(`runtime '${agent}' supportsImageGeneration must be a boolean`);
   }
@@ -647,6 +651,9 @@ function normalizeRuntime(
     ...(rt.catalogPresetId ? { catalogPresetId: rt.catalogPresetId } : {}),
   };
   if (rt.wireProtocol) out.wireProtocol = rt.wireProtocol;
+  if (agent === 'claude-code' && rt.usageMessageStartIncludesCache === true) {
+    out.usageMessageStartIncludesCache = true;
+  }
   if (agent === 'codex' && rt.supportsImageGeneration === true) {
     out.supportsImageGeneration = true;
   }
@@ -904,6 +911,9 @@ function parseRuntimes(raw: string): Partial<Record<AgentKind, CustomProviderRun
       // 旧版把 Pi 的缺省协议解释为 Chat。新写入口已要求显式 wireProtocol；仅在读取
       // 历史持久化记录时把旧语义物化，避免运行时重新猜测或按供应商穷举兼容。
       entry.wireProtocol = 'openai-chat';
+    }
+    if (agent === 'claude-code' && r.usageMessageStartIncludesCache === true) {
+      entry.usageMessageStartIncludesCache = true;
     }
     if (agent === 'codex' && r.supportsImageGeneration === true) {
       entry.supportsImageGeneration = true;

@@ -307,6 +307,8 @@ export function createAgentRuntimeConfigs(ports: AgentRuntimeConfigPorts) {
       }),
       // 代输入: sudo / ssh / git password prompts of this task go to the owner.
       taskShellEnv: inputHandoffTaskShellEnv,
+      usageMessageStartIncludesCache: (providerId) => getActiveCatalog().providers
+        .find(provider => provider.id === providerId)?.routing['claude-code']?.usageMessageStartIncludesCache === true,
       // 产品身份 + Skill 来源优先级 + Claude 专属段，按顺序拼接后给 maker-core append。
       systemPrompt: composeHostPrompt(claudeSystemPrompt),
       answerDeliveryPrompt: ANSWER_DELIVERY_PROMPT,
@@ -382,6 +384,8 @@ export function createAgentRuntimeConfigs(ports: AgentRuntimeConfigPorts) {
       behaviorFlags: (ctx) => (ctx.spawnMode === 'remote' ? {} : toolchainThreadCapEnv()),
       // 代输入: sudo / ssh / git password prompts of this task go to the owner.
       taskShellEnv: inputHandoffTaskShellEnv,
+      usageMessageStartIncludesCache: (providerId) => getActiveCatalog().providers
+        .find(provider => provider.id === providerId)?.routing['claude-code']?.usageMessageStartIncludesCache === true,
       // 产品身份 + Skill 来源优先级 + Codex 专属段。
       systemPrompt: composeHostPrompt(codexSystemPrompt),
       answerDeliveryPrompt: ANSWER_DELIVERY_PROMPT,

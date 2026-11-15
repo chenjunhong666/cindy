@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createAsyncQueue } from '../../shared/async-queue.js';
+import { AutoCompactController } from '../../shared/auto-compact-controller.js';
 import { UsageTracker } from '../../shared/usage-tracker.js';
 import {
   newRuntimeState,
@@ -26,6 +27,55 @@ function createTurnState(): TurnState {
 }
 
 describe('Claude Code translator context window', () => {
+  // Regression: an explicitly inclusive upstream must use disjoint billing buckets.
+  // Existing coverage only sends Anthropic-exclusive input. Unit tier, no I/O.
+  it.each([
+    { inclusive: false, input: 9_208, cache: 103_168 },
+    { inclusive: true, input: 9_208, cache: 103_168 },
+    { inclusive: true, input: 5_590, cache: 93_184 },
+  ])('normalizes start usage ($inclusive, $input + $cache)', ({ inclusive, input, cache }) => {
+    const total = input + cache;
+    const tracker = new UsageTracker();
+    const queue = createAsyncQueue<AgentEvent>();
+    const ctx = {
+      rt: newRuntimeState(), turn: createTurnState(),
+      log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      getModel: () => 'qwen', getEffort: () => 'high' as const,
+      getPermissionMode: () => 'auto' as const, onSessionId: vi.fn(),
+      getSdkSessionId: () => undefined, getLogTitle: () => undefined, tracker,
+      usageMessageStartIncludesCache: inclusive,
+    };
+    const usage = { input_tokens: inclusive ? total : input,
+      cache_read_input_tokens: cache, cache_creation_input_tokens: 0, output_tokens: 3 };
+    translateSdkMessage({ type: 'stream_event', event: {
+      type: 'message_start', message: { model: 'qwen', usage: { input_tokens: inclusive ? total : input } },
+    } }, queue, ctx);
+    if (inclusive) expect(tracker.getRequestMetering().models).toEqual([]);
+    translateSdkMessage({ type: 'stream_event', event: {
+      type: 'message_delta', usage: { ...usage, input_tokens: input },
+    } }, queue, ctx);
+    expect(tracker.snapshot().contextTokens).toBe(total);
+    expect(tracker.getTurnUsage().input).toBe(input);
+    expect(tracker.getRequestMetering().models[0]?.inputTokens).toBe(input);
+    const controller = new AutoCompactController({ logger: {
+      ...ctx.log, trace: vi.fn(), error: vi.fn(), fatal: vi.fn(), child: vi.fn(),
+    }, workdir: '.', agentKind: 'claude-code', getThresholdPct: () => 90 });
+    controller.onUsageUpdate(tracker.snapshot().contextTokens, 262_144);
+    expect(controller.shouldCompactNow()).toBe(false);
+    translateSdkMessage({ type: 'result', stop_reason: 'end_turn',
+      num_turns: 1, total_cost_usd: 0, usage: { ...usage, input_tokens: input } }, queue, ctx);
+    expect(tracker.snapshot().contextTokens).toBe(total);
+    translateSdkMessage({ type: 'stream_event', event: { type: 'message_start',
+      message: { model: 'qwen', usage: { input_tokens: inclusive ? 128_343 : 10_000 } },
+    } }, queue, ctx);
+    translateSdkMessage({ type: 'stream_event', event: { type: 'message_delta',
+      usage: { input_tokens: 10_000, cache_read_input_tokens: 118_343, output_tokens: 2 },
+    } }, queue, ctx);
+    expect(tracker.snapshot().contextTokens).toBe(128_343);
+    controller.onUsageUpdate(tracker.snapshot().contextTokens, 262_144);
+    expect(controller.shouldCompactNow()).toBe(false);
+  });
+
   it('preserves the SDK uuid as the compact boundary identity', async () => {
     const tracker = new UsageTracker();
     const queue = createAsyncQueue<AgentEvent>();

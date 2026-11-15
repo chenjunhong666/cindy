@@ -137,6 +137,28 @@ Pi 在启动或恢复时将模型比例写成原生 `compaction.reserveTokens` /
 `Agent.continue()` 语义压缩续接。Cindy 只消费 Pi 的 `compaction_start`／`compaction_end` 事件做
 UI、usage 与 digest 投影，不再向 Pi 注入 host 自动 compact RPC。
 
+### Claude 兼容上游的 usage 帧语义
+
+`routing['claude-code'].usageMessageStartIncludesCache: true` 显式声明上游在
+`message_start.input_tokens` 返回全量 prompt、在 `message_delta` 和 SDK result 返回
+未命中 input。自定义供应商在对应 `runtimes['claude-code']` 保存同名字段。
+缺省沿用 Anthropic 语义，不按模型名称或 token 大小推测。该声明下等待结束帧再记录
+用量，避免起始帧的全量 input 进入不可撤回的实时计费回执。请求计量、计费 segment
+和 result 汇总均使用未命中语义；生成期间保留上一请求的上下文读数。
+修复前已持久化的历史统计不自动重算。
+
+Claude CLI 2.1.321 的隔离真实进程测试确认，`deepseek-v4.1-flash[1m]` 在显式
+1,000,000 窗口下连续三轮接收 180,523 input 不触发原生自动压缩。
+`[1m]` 后缀在此路径可正常使用。测试见
+`claude-code/__tests__/context-window.integration.test.ts`。该测试使用本地假上游，
+不能证明其他已运行进程收到过相同环境配置。
+
+CLI 还会把用户／项目 `settings.env` 写进进程环境，覆盖 spawn env。例如
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW=220000` 加上 90% 阈值及原生预留，会在约 180K
+自动压缩。Cindy 的任务窗口与阈值同时写入最高优先级 flag settings 的 `env`，
+确保它们覆盖这些旧设置。只复制这三个窗口控制值，凭证不进入 flag settings。
+同一真实进程测试包含冲突用户设置，修复前会在 180K 压缩，修复后连续三轮保持 1M 窗口。
+
 ### 任务级窗口预算（分母）
 
 用户可以在单个任务上选择工作上下文窗口（tokens）：有效窗口 =
