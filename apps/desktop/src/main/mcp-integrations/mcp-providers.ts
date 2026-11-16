@@ -1,4 +1,5 @@
 import { resolveAutomaticProjectIcon } from '../projectAutomaticIcon.desktop.js';
+import { readSubscriptionUsage } from '../subscription-accounts/runtime.js';
 import { parseProjectSymbol, parseProjectLetters } from '@cindy/maker-shared/project-alias-sync';
 import { readProjectInfo } from '../projectInfoCore.js';
 import { updateProjectInfo } from '../localDb/ipc/projectAliases.js';
@@ -734,6 +735,11 @@ export function createDesktopMcpProviders(deps: DesktopMcpProvidersDeps): LiziMc
     // 启动早期跑, 那时 registerMakerIpc 还没执行, holder 是 null; 回调真正被调时
     // (LLM 调工具时) registerMakerIpc 早已执行完毕, holder 已 ready。
     xdtHelper: {
+      subscriptionUsage: { read: (context, providerId) => withAccountDataAccess(context.sessionId, async assertCurrent => {
+        const result = await readSubscriptionUsage(providerId);
+        await assertCurrent();
+        return result;
+      }) },
       hostServices: createHostServiceToolExecutor(hostServiceCatalog, { pluginCall: getPluginHostToolCaller, getGhost: findGhostForInstanceId }),
       files: createFileToolExecutor(getGhostFsSlot, getPluginHostToolCaller),
       storage: createStorageToolExecutor(getGhostStorageService, getPluginHostToolCaller),
@@ -1340,7 +1346,8 @@ export function createDesktopMcpProviders(deps: DesktopMcpProvidersDeps): LiziMc
         call: ({ callerSessionId, ...input }, signal) => withAccountDataAccess(callerSessionId, async (assertCurrent) => {
           const guard = async () => {
             await assertCurrent();
-            if (input.operation === 'set' || input.operation === 'provider' || input.operation === 'connection') await assertTaskActionCurrent();
+            if (input.operation === 'set' || input.operation === 'provider' || input.operation === 'connection' ||
+                (input.operation === 'mediaGuide' && input.change.action === 'save')) await assertTaskActionCurrent();
           };
           return manageAppModels(input, guard, async (name, endpoints, lifetime) => {
             await guard();

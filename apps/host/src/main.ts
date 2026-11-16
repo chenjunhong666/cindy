@@ -100,7 +100,6 @@ import { ownerScopedPath } from '../../desktop/src/main/dataOwnerPath.js';
 import { createHostPluginRuntime } from './plugins/runtime.js';
 import { createHostPluginGateway } from './plugins/gateway.js';
 import { createHostToolService } from './agent/host-tools.js';
-import { storageShareMessage } from '../../desktop/src/main/cindy-brain/storageService.js';
 import { createHostConfirmations } from './host-confirmations.js';
 import { createMainI18n } from '../../desktop/src/main/i18n.js';
 import { createHostMcpDuplicateChoices } from './agent/mcp-duplicate-choices.js';
@@ -583,6 +582,13 @@ async function ensureRuntime(ownerId: string): Promise<void> {
   });
   await modelAccess.start();
   pluginManager = createHostGhostManager({ userDataDir: dataDir, ownerId,
+    onUninstallSourceState: async fromPart => {
+      const current = plugins;
+      if (!current || activeOwnerScopeKey() !== pluginOwner) throw new Error('Plugin account cleanup is unavailable');
+      const release = current.acquireMutationLease(current.captureMutationOwner());
+      try { await current.authorization.cleanupSourceReferences(fromPart); }
+      finally { release(); }
+    },
     onChanged: ghosts => {
       if (activeOwnerScopeKey() !== pluginOwner || isAppSessionBoundaryPending()) return;
       eventHub.publish({ type: 'plugin_push', channel: 'ghosts:changed', payload: { ghosts } });
@@ -605,13 +611,6 @@ async function ensureRuntime(ownerId: string): Promise<void> {
   });
   plugins = await createHostPluginRuntime({ profileDir: dataDir, ownerId, manager: pluginManager, credentials,
     hostToolRequest: hostTools.request, onPluginStopped: hostTools.stopPlugin,
-    confirmStorageShare: async (facts, check) => {
-      if (!check() || !hostConfirmations) return false;
-      const confirmed = await hostConfirmations.confirm({ ghostId: facts.sourceId, ghostName: facts.sourceName,
-        body: `${storageShareMessage(i18n.t, facts)}\n\n${facts.sourceId}\n→ ${facts.targetId}`,
-        confirmText: i18n.t('settings.ghosts.connections.confirmAllow'), cancelText: null, danger: false });
-      return check() && confirmed;
-    },
     getLoginEmail: () => accountUser?.email ?? null,
     getUser: () => accountUser,
     account: {
@@ -644,6 +643,8 @@ async function ensureRuntime(ownerId: string): Promise<void> {
       } else eventHub.publish({ type: 'plugin_push', channel, payload });
     },
   });
+
+  if (pluginManager.hasPendingMutationRecovery()) await pluginManager.retryInterruptedMutationsAfterDbReady();
 
   pluginGateway = createHostPluginGateway({ runtime: plugins, profileDir: dataDir, ownerId,
     version: layout.version, credentials, fileConfirmation,
